@@ -26,12 +26,18 @@ app.use('/api/likes', likeRoutes);
 app.use('/api/follows', followRoutes);
 app.use('/api/upload', uploadRoutes);
 
-// Serve the frontend as static files
+// Serve the frontend as static files (used for local dev)
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+
+// Only run app.listen when NOT on Vercel — Vercel handles the server itself
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
