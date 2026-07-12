@@ -1,125 +1,120 @@
 const express = require('express');
-const db = require('../db/database');
-const { authRequired, authOptional } = require('../middleware/auth');
+const supabase = require('../config/supabase');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-function enrichPost(post, viewerId) {
-  const author = db.prepare('SELECT id, username, avatar_url FROM users WHERE id = ?').get(post.user_id);
-  const likeCount = db.prepare('SELECT COUNT(*) c FROM likes WHERE post_id = ?').get(post.id).c;
-  const commentCount = db.prepare('SELECT COUNT(*) c FROM comments WHERE post_id = ?').get(post.id).c;
-  let likedByMe = false;
-  if (viewerId) {
-    likedByMe = !!db.prepare('SELECT 1 FROM likes WHERE post_id = ? AND user_id = ?').get(post.id, viewerId);
+// helper: attach author info + comment count + whether current user liked it
+async function enrichPosts(posts, currentUserId) {
+  if (!posts.length) return [];
+
+  const userIds = [...new Set(posts.map(p => p.user_id))];
+  const { data: authors } = await supabase
+    .from('users').select('id, username, avatar_url').in('id', userIds);
+  const authorMap = Object.fromEntries((authors || []).map(a => [a.id, a]));
+
+  const postIds = posts.map(p => p.id);
+  const { data: allComments } = await supabase
+    .from('comments').select('post_id').in('post_id', postIds);
+  const commentCounts = {};
+  (allComments || []).forEach(c => { commentCounts[c.post_id] = (commentCounts[c.post_id] || 0) + 1; });
+
+  let likedSet = new Set();
+  if (currentUserId) {
+    const { data: myLikes } = await supabase
+      .from('likes').select('post_id').eq('user_id', currentUserId).in('post_id', postIds);
+    likedSet = new Set((myLikes || []).map(l => l.post_id));
   }
-  return { ...post, author, likeCount, commentCount, likedByMe };
+
+  return posts.map(p => ({
+    ...p,
+    author: authorMap[p.user_id] || null,
+    comments_count: commentCounts[p.id] || 0,
+    liked_by_me: likedSet.has(p.id),
+  }));
 }
 
-// Global feed (all posts, newest first)
-router.get('/', authOptional, (req, res) => {
-  const posts = db.prepare('SELECT * FROM posts ORDER BY created_at DESC LIMIT 100').all();
-  res.json(posts.map(p => enrichPost(p, req.user && req.user.id)));
-});
-
-// Personalized feed: posts from people you follow + your own
-router.get('/feed', authRequired, (req, res) => {
-  const posts = db.prepare(`
-    SELECT p.* FROM posts p
-    WHERE p.user_id = ?
-       OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?)
-    ORDER BY p.created_at DESC
-    LIMIT 100
-  `).all(req.user.id, req.user.id);
-  res.json(posts.map(p => enrichPost(p, req.user.id)));
-});
-
-// Get single post
-router.get('/:id', authOptional, (req, res) => {
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
-  if (!post) return res.status(404).json({ error: 'Post not found' });
-  res.json(enrichPost(post, req.user && req.user.id));
-});
-
-// Create post
-router.post('/', authRequired, (req, res) => {
-  const { content, image_url } = req.body;
-  if (!content || !content.trim()) {
-    return res.status(400).json({ error: 'Post content is required' });
-  }
-  const info = db.prepare('INSERT INTO posts (user_id, content, image_url) VALUES (?, ?, ?)')
-    .run(req.user.id, content.trim(), image_url || '');
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(info.lastInsertRowid);
-  res.status(201).json(enrichPost(post, req.user.id));
-});
-
-// Delete post (owner only)
-router.delete('/:id', authRequired, (req, res) => {
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
-  if (!post) return res.status(404).json({ error: 'Post not found' });
-  if (post.user_id !== req.user.id) return res.status(403).json({ error: 'Not your post' });
-
-  db.prepare('DELETE FROM posts WHERE id = ?').run(req.params.id);
-  res.json({ message: 'Post deleted' });
-});
-
-// Like a post
-router.post('/:id/like', authRequired, (req, res) => {
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
-  if (!post) return res.status(404).json({ error: 'Post not found' });
-
+// POST /api/posts - create a new post
+router.post('/', requireAuth, async (req, res) => {
   try {
-    db.prepare('INSERT INTO likes (post_id, user_id) VALUES (?, ?)').run(req.params.id, req.user.id);
-    res.status(201).json({ message: 'Liked' });
-  } catch {
-    res.status(409).json({ error: 'Already liked' });
+    const { title, description, media_type, media_url } = req.body;
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    const { data, error } = await supabase
+      .from('posts')
+      .insert({
+        user_id: req.user.id,
+        title,
+        description: description || '',
+        media_type: media_type || 'text',
+        media_url: media_url || '',
+        likes_count: 0,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not create post' });
   }
 });
 
-// Unlike a post
-router.delete('/:id/like', authRequired, (req, res) => {
-  db.prepare('DELETE FROM likes WHERE post_id = ? AND user_id = ?').run(req.params.id, req.user.id);
-  res.json({ message: 'Unliked' });
+// GET /api/posts/feed - posts from people the current user follows
+router.get('/feed', requireAuth, async (req, res) => {
+  try {
+    const { data: following } = await supabase
+      .from('follows').select('following_id').eq('follower_id', req.user.id);
+    const followingIds = (following || []).map(f => f.following_id);
+    followingIds.push(req.user.id); // include your own posts too
+
+    const { data: posts, error } = await supabase
+      .from('posts')
+      .select('*')
+      .in('user_id', followingIds)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(await enrichPosts(posts, req.user.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load feed' });
+  }
 });
 
-// Get comments for a post
-router.get('/:id/comments', (req, res) => {
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar_url
-    FROM comments c JOIN users u ON u.id = c.user_id
-    WHERE c.post_id = ?
-    ORDER BY c.created_at ASC
-  `).all(req.params.id);
-  res.json(comments);
+// GET /api/posts/explore - all posts, newest first (works for guests too)
+router.get('/explore', optionalAuth, async (req, res) => {
+  try {
+    const { data: posts, error } = await supabase
+      .from('posts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+    res.json(await enrichPosts(posts, req.user && req.user.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load explore feed' });
+  }
 });
 
-// Add comment to a post
-router.post('/:id/comments', authRequired, (req, res) => {
-  const { content } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Comment content is required' });
+// GET /api/posts/:id - single post detail
+router.get('/:id', optionalAuth, async (req, res) => {
+  try {
+    const { data: post, error } = await supabase
+      .from('posts').select('*').eq('id', req.params.id).maybeSingle();
 
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
-  if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (error) throw error;
+    if (!post) return res.status(404).json({ error: 'Post not found' });
 
-  const info = db.prepare('INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)')
-    .run(req.params.id, req.user.id, content.trim());
-
-  const comment = db.prepare(`
-    SELECT c.*, u.username, u.avatar_url
-    FROM comments c JOIN users u ON u.id = c.user_id
-    WHERE c.id = ?
-  `).get(info.lastInsertRowid);
-
-  res.status(201).json(comment);
-});
-
-// Delete a comment (owner only)
-router.delete('/comments/:commentId', authRequired, (req, res) => {
-  const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(req.params.commentId);
-  if (!comment) return res.status(404).json({ error: 'Comment not found' });
-  if (comment.user_id !== req.user.id) return res.status(403).json({ error: 'Not your comment' });
-
-  db.prepare('DELETE FROM comments WHERE id = ?').run(req.params.commentId);
-  res.json({ message: 'Comment deleted' });
+    const [enriched] = await enrichPosts([post], req.user && req.user.id);
+    res.json(enriched);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load post' });
+  }
 });
 
 module.exports = router;

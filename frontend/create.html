@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create post — CodeAlpha Social</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/dist/tabler-icons.min.css">
+</head>
+<body>
+  <div class="app-shell">
+    <div class="top-header">
+      <a href="feed.html" class="header-icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5"></path>
+          <path d="M12 19l-7-7 7-7"></path>
+        </svg>
+      </a>
+      <div class="logo" style="font-size:18px">New post</div>
+      <div style="width:40px"></div>
+    </div>
+
+    <div class="create-wrap">
+      <div id="form-error" class="form-error"></div>
+
+      <div class="field">
+        <label>Post type</label>
+        <div class="media-type-select" id="type-select">
+          <button type="button" data-type="text" class="active">Text</button>
+          <button type="button" data-type="image">Image</button>
+          <button type="button" data-type="video">Video</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="post-title" placeholder="What's happening?" required>
+      </div>
+
+      <div class="field">
+        <label>Description</label>
+        <textarea id="post-description" placeholder="Say more about it..."></textarea>
+      </div>
+
+      <div class="field" id="image-file-field" style="display:none">
+        <label>Upload image</label>
+        <input type="file" id="post-image-file" accept="image/*">
+        <div id="image-preview-wrap"></div>
+      </div>
+
+      <div class="field" id="video-file-field" style="display:none">
+        <label>Upload video</label>
+        <input type="file" id="post-video-file" accept="video/*">
+        <div id="video-preview-wrap"></div>
+      </div>
+
+      <button class="btn-gradient" id="submit-post-btn">Share post</button>
+    </div>
+
+    <nav class="bottom-nav" id="bottom-nav-slot"></nav>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/create.js"></script>
+</body>
+</html>

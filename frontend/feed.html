@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feed — CodeAlpha Social</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/dist/tabler-icons.min.css">
+</head>
+<body>
+  <div class="app-shell">
+    <div class="top-header">
+      <a href="feed.html" class="header-icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5"></path>
+          <path d="M12 19l-7-7 7-7"></path>
+        </svg>
+      </a>
+      <div class="logo">CodeAlpha</div>
+      <button class="header-icon-btn" onclick="Auth.logout()"><i class="ti ti-logout"></i></button>
+    </div>
+
+    <div id="stories-slot"></div>
+
+    <div id="feed-slot">
+      <div class="loading-spinner">Loading your feed...</div>
+    </div>
+
+    <nav class="bottom-nav" id="bottom-nav-slot"></nav>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/postcard.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/feed.js"></script>
+</body>
+</html>

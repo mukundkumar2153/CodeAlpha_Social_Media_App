@@ -1,126 +1,92 @@
-# 🌊 Ripple — Mini Social Media App
+# CodeAlpha Social Media Platform
 
-A full-stack mini social media platform with user profiles, posts, comments, likes, and a follow system.
+A full-stack mini social media app built for the CodeAlpha Full Stack Development internship (Task 2).
 
-**Stack:** Express.js + SQLite (backend) · HTML/CSS/vanilla JS (frontend) · JWT auth
-
----
+**Stack:** Node.js + Express (backend) · Supabase / Postgres (database) · HTML, CSS, vanilla JS (frontend)
 
 ## Features
 
-- **Auth** — register/login with hashed passwords (bcrypt) + JWT sessions
-- **Profiles** — bio, avatar initials, follower/following/post counts, editable bio
-- **Posts** — create/delete text posts with optional image URL
-- **Comments** — add comments to any post, delete your own
-- **Likes** — like/unlike posts, live like counts
-- **Follow system** — follow/unfollow users, "Following" feed vs. global "Explore" feed
+- User registration & login (JWT + bcrypt)
+- User profiles with bio and stats (posts / followers / following)
+- Create posts: text-only, image, or embedded video (YouTube/Instagram embed links)
+- Like / unlike posts
+- Comment on posts
+- Follow / unfollow users
+- Home feed (posts from people you follow) + Explore grid (everyone's posts)
+- Seed script that fills the database with sample users, posts, comments and randomized like counts, so the app doesn't look empty on first run
 
----
-
-## Project Structure
+## Project structure
 
 ```
-social-app/
+CodeAlpha_SocialMediaApp/
 ├── backend/
-│   ├── server.js            # Express app entry point
-│   ├── db/
-│   │   └── database.js      # SQLite schema + connection
-│   ├── middleware/
-│   │   └── auth.js          # JWT verification middleware
-│   ├── routes/
-│   │   ├── auth.js          # /api/auth (register, login)
-│   │   ├── users.js         # /api/users (profiles, follow)
-│   │   └── posts.js         # /api/posts (posts, comments, likes)
-│   └── package.json
+│   ├── config/supabase.js       Supabase client setup
+│   ├── middleware/auth.js       JWT auth middleware
+│   ├── routes/                  auth, users, posts, comments, likes, follows
+│   ├── db/schema.sql            run this in Supabase SQL editor
+│   ├── db/seed.js               populates sample data
+│   ├── server.js                Express app entry point
+│   └── .env.example             copy to .env and fill in your keys
 └── frontend/
-    ├── index.html
-    ├── style.css
-    └── app.js
+    ├── index.html                login / register
+    ├── feed.html                 home feed
+    ├── explore.html               discover grid
+    ├── profile.html               user profile
+    ├── post.html                  single post + comments
+    ├── create.html                create a post
+    ├── css/style.css
+    └── js/                        api.js, auth.js, feed.js, explore.js, profile.js, post.js, create.js, postcard.js, nav.js
 ```
 
----
+## Setup steps
 
-## Setup
+### 1. Create a Supabase project
+Go to [supabase.com](https://supabase.com), create a new project, and wait for it to finish provisioning.
 
-### 1. Backend
+### 2. Run the schema
+Open **Supabase Dashboard → SQL Editor → New query**, paste the contents of `backend/db/schema.sql`, and run it. This creates the `users`, `posts`, `comments`, `likes`, and `follows` tables.
 
+### 3. Get your API keys
+In **Project Settings → API**, copy:
+- Project URL
+- `service_role` key (not the anon key — the backend needs elevated access)
+
+### 4. Configure environment variables
 ```bash
 cd backend
+cp .env.example .env
+```
+Open `.env` and fill in `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and set your own `JWT_SECRET` (any long random string).
+
+### 5. Install dependencies
+```bash
 npm install
+```
+
+### 6. Seed sample data (optional but recommended)
+```bash
+npm run seed
+```
+This creates 8 sample users (all with password `password123`), ~18 posts with titles/descriptions, comments on some of them, and randomized like counts (some 10-15, some in the thousands).
+
+**Important:** the seed script leaves `media_url` blank on every post. To add real images or videos:
+1. Go to **Supabase Dashboard → Table editor → posts**
+2. Find the row you want
+3. Paste your image URL or YouTube/Instagram embed URL into the `media_url` column
+4. Make sure `media_type` matches (`image` or `embed`)
+
+For embed URLs, use the actual embed link, not the normal share link — e.g. for YouTube:
+`https://www.youtube.com/embed/VIDEO_ID` (not `https://www.youtube.com/watch?v=VIDEO_ID`)
+
+### 7. Run the server
+```bash
 npm start
 ```
+Then open `http://localhost:5000` in your browser.
 
-Server runs at `http://localhost:5000`. SQLite database file (`social.db`) is created automatically on first run — no separate DB setup needed.
+## Notes
 
-Optional: set a custom JWT secret via environment variable:
-```bash
-JWT_SECRET=your-secret-here npm start
-```
-
-### 2. Frontend
-
-The frontend is plain static files — no build step. Just open `frontend/index.html` in a browser, or serve it:
-
-```bash
-cd frontend
-npx serve -l 3000
-```
-
-Then visit `http://localhost:3000`. Make sure the backend is running on port 5000 (or edit `API_BASE` in `app.js` if you change the port).
-
----
-
-## API Reference
-
-### Auth
-| Method | Route | Description |
-|---|---|---|
-| POST | `/api/auth/register` | `{ username, email, password, bio? }` → user + token |
-| POST | `/api/auth/login` | `{ username, password }` → user + token |
-
-### Users
-| Method | Route | Auth | Description |
-|---|---|---|---|
-| GET | `/api/users/:username` | optional | Get profile + stats |
-| PUT | `/api/users/me` | required | Update `{ bio, avatar_url }` |
-| POST | `/api/users/:username/follow` | required | Follow a user |
-| DELETE | `/api/users/:username/follow` | required | Unfollow a user |
-| GET | `/api/users/:username/followers` | — | List followers |
-| GET | `/api/users/:username/following` | — | List who they follow |
-
-### Posts
-| Method | Route | Auth | Description |
-|---|---|---|---|
-| GET | `/api/posts` | optional | Global feed (all posts) |
-| GET | `/api/posts/feed` | required | Personalized feed (following + self) |
-| GET | `/api/posts/:id` | optional | Single post |
-| POST | `/api/posts` | required | Create `{ content, image_url? }` |
-| DELETE | `/api/posts/:id` | required | Delete own post |
-| POST | `/api/posts/:id/like` | required | Like a post |
-| DELETE | `/api/posts/:id/like` | required | Unlike a post |
-| GET | `/api/posts/:id/comments` | — | List comments |
-| POST | `/api/posts/:id/comments` | required | Add `{ content }` |
-| DELETE | `/api/posts/comments/:commentId` | required | Delete own comment |
-
-All authenticated routes expect `Authorization: Bearer <token>`.
-
----
-
-## Database Schema
-
-- **users**: id, username, email, password_hash, bio, avatar_url, created_at
-- **posts**: id, user_id, content, image_url, created_at
-- **comments**: id, post_id, user_id, content, created_at
-- **likes**: id, post_id, user_id, created_at (unique per post+user)
-- **follows**: id, follower_id, following_id, created_at (unique per pair)
-
-Foreign keys cascade on delete (deleting a user removes their posts/comments/likes/follows).
-
----
-
-## Notes for extending
-
-- Swap SQLite for Postgres/MySQL by changing `db/database.js` — the query style (`better-sqlite3`'s `.prepare().get()/.all()/.run()`) would need a client-specific adapter, but the schema translates directly.
-- Add image upload (vs. URL) with `multer` + local/S3 storage.
-- Add pagination to `/api/posts` and `/api/posts/feed` (currently capped at 100).
-- Password reset, email verification, and rate limiting are not implemented — add before any real deployment.
+- Passwords are hashed with bcrypt before storage — never stored in plain text.
+- JWT tokens are valid for 7 days and stored in the browser's localStorage.
+- The `likes` table tracks who liked what (so a real logged-in user can only like a post once); the `likes_count` column on `posts` is what's displayed and is what the seed script randomizes.
+- This project satisfies CodeAlpha Task 2 requirements: user profiles, posts & comments, and a like/follow system, backed by a real database.
