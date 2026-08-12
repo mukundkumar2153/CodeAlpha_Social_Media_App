@@ -90,3 +90,10 @@ Then open `http://localhost:5000` in your browser.
 - JWT tokens are valid for 7 days and stored in the browser's localStorage.
 - The `likes` table tracks who liked what (so a real logged-in user can only like a post once); the `likes_count` column on `posts` is what's displayed and is what the seed script randomizes.
 - This project satisfies CodeAlpha Task 2 requirements: user profiles, posts & comments, and a like/follow system, backed by a real database.
+
+## 🌐 Live Demo
+
+> **Try WaveChat live:**
+
+## 🔗 [https://codealpha-social-media-app.vercel.app](https://codealpha-social-media-app.vercel.app)
+
